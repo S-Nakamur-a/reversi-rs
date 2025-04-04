@@ -37,7 +37,7 @@ impl Board {
         // 列ラベル
         print!("  ");
         for col in 0..8 {
-            print!(" {}  ", (b'A' + col as u8) as char);
+            print!(" {}", (b'A' + col as u8) as char);
         }
         println!();
         for row in 0..8 {
@@ -53,7 +53,7 @@ impl Board {
                     None => "⚪︎".to_string(),
                 };
                 // 背景を残すため、背景コードを前に付けて出力
-                print!("{} {} {}", bg, cell_str, reset);
+                print!("{}{}{}", bg, cell_str, reset);
             }
             println!();
         }
@@ -160,15 +160,18 @@ impl Board {
         self.valid_moves(Piece::Black).is_empty() && self.valid_moves(Piece::White).is_empty()
     }
 
-    // 評価関数：石の個数差に加え、角の獲得にボーナスを与える
     fn evaluate(&self, piece: Piece) -> i32 {
         let mut score = 0;
+        let piece_weight = 10;
         let corner_bonus = 25;
+    
+        // 基本評価：石の数と角ボーナス
         for row in 0..8 {
             for col in 0..8 {
                 match self.cells[row][col] {
                     Some(p) if p == piece => {
-                        score += 10;
+                        score += piece_weight;
+                        // 角ならさらにボーナス
                         if (row == 0 && col == 0)
                             || (row == 0 && col == 7)
                             || (row == 7 && col == 0)
@@ -178,7 +181,7 @@ impl Board {
                         }
                     }
                     Some(p) if p == piece.opponent() => {
-                        score -= 10;
+                        score -= piece_weight;
                         if (row == 0 && col == 0)
                             || (row == 0 && col == 7)
                             || (row == 7 && col == 0)
@@ -191,6 +194,38 @@ impl Board {
                 }
             }
         }
+    
+        // ムービリティ評価：合法手の候補数の差を評価に反映
+        let mobility_weight = 5;
+        let my_moves = self.valid_moves(piece).len() as i32;
+        let opp_moves = self.valid_moves(piece.opponent()).len() as i32;
+        score += mobility_weight * (my_moves - opp_moves);
+    
+        // 角の隣接マスに対するペナルティ（角が空の場合）
+        let adjacent_penalty = 10;
+        let corners = [(0, 0), (0, 7), (7, 0), (7, 7)];
+        for &(r, c) in &corners {
+            if self.cells[r][c].is_none() {
+                let adjacent_coords = match (r, c) {
+                    (0, 0) => vec![(0, 1), (1, 0), (1, 1)],
+                    (0, 7) => vec![(0, 6), (1, 7), (1, 6)],
+                    (7, 0) => vec![(6, 0), (7, 1), (6, 1)],
+                    (7, 7) => vec![(6, 7), (7, 6), (6, 6)],
+                    _ => vec![],
+                };
+                for (ar, ac) in adjacent_coords {
+                    if let Some(p) = self.cells[ar][ac] {
+                        // 自分の石ならペナルティ、相手の石ならプラス（＝自分にとって不利）
+                        if p == piece {
+                            score -= adjacent_penalty;
+                        } else {
+                            score += adjacent_penalty;
+                        }
+                    }
+                }
+            }
+        }
+    
         score
     }
 }
